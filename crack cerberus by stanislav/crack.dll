@@ -1,0 +1,78 @@
+#include <iostream>
+#include <vector>
+#include <windows.h>
+#include <sstream>
+#include <bitset>
+#include <sysinfoapi.h>
+#include <intrin.h>
+
+#define CHECK_BIT(var, pos) (((var) & (1ULL << (pos))) != 0)
+#define MIN_RAM_MB 4096  
+#define MIN_OS_MAJOR 10  
+#define ARCH_X64 64  
+
+class WindowsChecker {
+private:
+    SYSTEM_INFO sysInfo;
+    MEMORYSTATUSEX memStatus;
+    OSVERSIONINFOEX osInfo;
+    bool is64Bit;
+    bool hasEnoughRAM;
+    bool isWindowsCompatible;
+    std::string cpuName;
+    
+    void getCPUInfo() {
+        int cpuInfo[4] = {0};
+        char name[49] = {0};
+        __cpuid(cpuInfo, 0x80000002);
+        memcpy(name, cpuInfo, sizeof(cpuInfo));
+        __cpuid(cpuInfo, 0x80000003);
+        memcpy(name + 16, cpuInfo, sizeof(cpuInfo));
+        __cpuid(cpuInfo, 0x80000004);
+        memcpy(name + 32, cpuInfo, sizeof(cpuInfo));
+        cpuName = std::string(name);
+    }
+
+    void checkSystemInfo() {
+        GetSystemInfo(&sysInfo);
+        is64Bit = (sysInfo.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64);
+
+        memStatus.dwLength = sizeof(MEMORYSTATUSEX);
+        GlobalMemoryStatusEx(&memStatus);
+        hasEnoughRAM = (memStatus.ullTotalPhys / (1024 * 1024)) >= MIN_RAM_MB;
+
+        osInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+        if (!GetVersionEx((LPOSVERSIONINFO)&osInfo)) {
+            isWindowsCompatible = false;
+            return;
+        }
+        isWindowsCompatible = (osInfo.dwMajorVersion >= MIN_OS_MAJOR);
+    }
+
+public:
+    WindowsChecker() {
+        checkSystemInfo();
+        getCPUInfo();
+    }
+
+    bool isCompatible() {
+        return is64Bit && hasEnoughRAM && isWindowsCompatible;
+    }
+
+    void printSystemInfo() {
+        std::ostringstream oss;
+        oss << "🔍 Системная информация:\n";
+        oss << "🖥️  Процессор: " << cpuName << "\n";
+        oss << "🔢 Архитектура: " << (is64Bit ? "64-bit" : "32-bit") << "\n";
+        oss << "🛠️  Версия Windows: " << osInfo.dwMajorVersion << "." << osInfo.dwMinorVersion << "\n";
+        oss << "💾 ОЗУ: " << (memStatus.ullTotalPhys / (1024 * 1024)) << " MB\n";
+        oss << "✅ Подходит: " << (isCompatible() ? "ДА" : "НЕТ") << "\n";
+        std::cout << oss.str();
+    }
+};
+
+int main() {
+    WindowsChecker checker;
+    checker.printSystemInfo();
+    return 0;
+}
